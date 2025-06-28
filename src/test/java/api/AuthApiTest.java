@@ -1,11 +1,14 @@
 package api;
 
+import io.qameta.allure.Description;
 import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
 import org.junit.After;
 import org.junit.Test;
 import pojo.User;
 
+import static org.apache.http.HttpStatus.SC_OK;
+import static org.apache.http.HttpStatus.SC_UNAUTHORIZED;
 import static org.hamcrest.Matchers.*;
 
 public class AuthApiTest {
@@ -20,34 +23,55 @@ public class AuthApiTest {
 
     @Test
     @DisplayName("Успешный логин пользователя")
-    public void loginUserSuccess() {
+    @Description("Проверка успешной авторизации существующего пользователя")
+    public void loginUserSuccessTest() {
+        // Создание уникального пользователя
         String email = "login_user_" + System.currentTimeMillis() + "@test.ru";
         User user = new User(email, "password", "Login User");
-        AuthHelper.registerUser(user);
 
-        Response response = AuthHelper.loginUser(user);
-        response.then()
-                .statusCode(200)
+        // Регистрация и сохранение токена ДО проверок
+        Response registerResponse = AuthHelper.registerUser(user);
+        accessToken = AuthHelper.getAccessToken(registerResponse);
+
+        // Авторизация под созданным пользователем
+        Response loginResponse = AuthHelper.loginUser(user);
+        loginResponse.then()
+                .statusCode(SC_OK)
                 .body("success", equalTo(true))
                 .body("accessToken", notNullValue());
-
-        accessToken = AuthHelper.getAccessToken(response);
     }
 
     @Test
     @DisplayName("Логин с неверным паролем")
-    public void loginUserWithWrongPasswordFail() {
+    @Description("Попытка авторизации с неверным паролем должна вернуть ошибку")
+    public void loginUserWithWrongPasswordFailTest() {
+        // Создание уникального пользователя
         String email = "wrong_pass_user_" + System.currentTimeMillis() + "@test.ru";
         User user = new User(email, "password", "Wrong Pass User");
-        AuthHelper.registerUser(user);
 
+        // Регистрация и сохранение токена ДО проверок
+        Response registerResponse = AuthHelper.registerUser(user);
+        accessToken = AuthHelper.getAccessToken(registerResponse);
+
+        // Попытка авторизации с неверным паролем
         User wrongUser = new User(user.getEmail(), "wrong_password", user.getName());
         AuthHelper.loginUser(wrongUser)
                 .then()
-                .statusCode(401)
+                .statusCode(SC_UNAUTHORIZED)
                 .body("success", equalTo(false))
                 .body("message", equalTo("email or password are incorrect"));
+    }
 
-        accessToken = AuthHelper.getAccessToken(AuthHelper.loginUser(user));
+    @Test
+    @DisplayName("Логин с неверным email")
+    @Description("Попытка авторизации с несуществующим email должна вернуть ошибку")
+    public void loginUserWithWrongEmailFailTest() {
+        // Попытка авторизации с несуществующими данными
+        User user = new User("nonexistent@test.ru", "password", "NonExistent User");
+        AuthHelper.loginUser(user)
+                .then()
+                .statusCode(SC_UNAUTHORIZED)
+                .body("success", equalTo(false))
+                .body("message", equalTo("email or password are incorrect"));
     }
 }

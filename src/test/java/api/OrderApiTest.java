@@ -1,5 +1,6 @@
 package api;
 
+import io.qameta.allure.Description;
 import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
 import org.junit.After;
@@ -9,25 +10,18 @@ import pojo.User;
 
 import java.util.List;
 
-import static io.restassured.RestAssured.given;
+import static org.apache.http.HttpStatus.*;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertNotNull;
 
 @DisplayName("API тесты для создания заказов")
 public class OrderApiTest {
-    private static final String BASE_URI = "https://stellarburgers.nomoreparties.site";
-    private static final String INGREDIENTS_ENDPOINT = "/api/ingredients";
-    private static final String ORDERS_ENDPOINT = "/api/orders";
     private String accessToken;
 
     private List<String> getValidIngredients() {
-        return given()
-                .baseUri(BASE_URI)
-                .get(INGREDIENTS_ENDPOINT)
-                .then()
-                .statusCode(200)
-                .extract()
-                .path("data._id");
+        Response response = OrderHelper.getIngredients();
+        response.then().statusCode(SC_OK);
+        return response.jsonPath().getList("data._id");
     }
 
     @After
@@ -39,73 +33,55 @@ public class OrderApiTest {
 
     @Test
     @DisplayName("Создание заказа с авторизацией и ингредиентами")
-    public void createOrderWithAuthAndIngredientsSuccess() {
+    @Description("Успешное создание заказа авторизованным пользователем с валидными ингредиентами")
+    public void createOrderWithAuthAndIngredientsSuccessTest() {
         String email = "order_user_" + System.currentTimeMillis() + "@test.ru";
         User user = new User(email, "password", "Username");
 
         Response registerResponse = AuthHelper.registerUser(user);
-        registerResponse.then().statusCode(200);
-
+        registerResponse.then().statusCode(SC_OK);
         accessToken = AuthHelper.getAccessToken(registerResponse);
         assertNotNull("Access token должен быть получен", accessToken);
 
         Order order = new Order(getValidIngredients().toArray(new String[0]));
-
-        given()
-                .baseUri(BASE_URI)
-                .header("Content-Type", "application/json")
-                .header("Authorization", accessToken) // Токен уже содержит "Bearer "
-                .body(order)
-                .post(ORDERS_ENDPOINT)
+        OrderHelper.createOrder(order, accessToken)
                 .then()
-                .statusCode(200)
+                .statusCode(SC_OK)
                 .body("success", equalTo(true))
                 .body("order.number", notNullValue());
     }
 
     @Test
     @DisplayName("Создание заказа без авторизации")
-    public void createOrderWithoutAuthSuccess() {
+    @Description("Создание заказа без авторизации, но с валидными ингредиентами")
+    public void createOrderWithoutAuthSuccessTest() {
         Order order = new Order(getValidIngredients().toArray(new String[0]));
-
-        given()
-                .baseUri(BASE_URI)
-                .header("Content-Type", "application/json")
-                .body(order)
-                .post(ORDERS_ENDPOINT)
+        OrderHelper.createOrder(order, null)
                 .then()
-                .statusCode(200)
+                .statusCode(SC_OK)
                 .body("success", equalTo(true))
                 .body("order.number", notNullValue());
     }
 
     @Test
     @DisplayName("Создание заказа без ингредиентов")
-    public void createOrderWithoutIngredientsFail() {
+    @Description("Попытка создания заказа без ингредиентов возвращает ошибку")
+    public void createOrderWithoutIngredientsFailTest() {
         Order order = new Order(new String[]{});
-
-        given()
-                .baseUri(BASE_URI)
-                .header("Content-Type", "application/json")
-                .body(order)
-                .post(ORDERS_ENDPOINT)
+        OrderHelper.createOrder(order, null)
                 .then()
-                .statusCode(400)
+                .statusCode(SC_BAD_REQUEST)
                 .body("success", equalTo(false))
                 .body("message", equalTo("Ingredient ids must be provided"));
     }
 
     @Test
     @DisplayName("Создание заказа с невалидным хешем ингредиентов")
-    public void createOrderWithInvalidIngredientHashFail() {
+    @Description("Попытка создания заказа с невалидным хешем ингредиентов возвращает внутреннюю ошибку сервера")
+    public void createOrderWithInvalidIngredientHashFailTest() {
         Order order = new Order(new String[]{"invalid_hash_12345"});
-
-        given()
-                .baseUri(BASE_URI)
-                .header("Content-Type", "application/json")
-                .body(order)
-                .post(ORDERS_ENDPOINT)
+        OrderHelper.createOrder(order, null)
                 .then()
-                .statusCode(500);
+                .statusCode(SC_INTERNAL_SERVER_ERROR);
     }
 }

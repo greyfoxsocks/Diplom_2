@@ -1,20 +1,10 @@
 package pojo;
 
-import java.util.Arrays;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 
+@Getter
+@AllArgsConstructor
 public class Order {
-    private final String[] ingredients;
-
-    public Order(String[] ingredients) {
-        this.ingredients = ingredients;
-    }
-
-    public String[] getIngredients() {
-        return ingredients;
-    }
-
-    @Override
-    public String toString() {
-        return "{\"ingredients\":" + Arrays.toString(ingredients) + "}";
-    }
+    private String[] ingredients;
 }
