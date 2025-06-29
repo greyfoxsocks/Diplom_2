@@ -1,9 +1,9 @@
 package api;
 
+import api.helpers.AuthHelper;
 import io.qameta.allure.Description;
 import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
-import org.junit.After;
 import org.junit.Test;
 import pojo.User;
 
@@ -12,27 +12,16 @@ import static org.hamcrest.CoreMatchers.equalTo;
 
 @DisplayName("API тесты для создания пользователя")
 public class UserApiTest {
-    private String accessToken;
-
-    @After
-    public void tearDown() {
-        if (accessToken != null) {
-            AuthHelper.deleteUser(accessToken);
-        }
-    }
 
     @Test
     @DisplayName("Создание уникального пользователя")
     @Description("Успешная регистрация нового пользователя")
     public void createUniqueUserSuccessTest() {
         User user = new User("unique_user_" + System.currentTimeMillis() + "@test.ru", "password", "Username");
-        Response response = AuthHelper.registerUser(user);
-
-        response.then()
+        AuthHelper.registerUser(user)
+                .then()
                 .statusCode(SC_OK)
                 .body("success", equalTo(true));
-
-        accessToken = AuthHelper.getAccessToken(response);
     }
 
     @Test
@@ -43,13 +32,11 @@ public class UserApiTest {
         User user = new User(email, "password", "Username");
 
         // Первая регистрация
-        Response firstRegister = AuthHelper.registerUser(user);
-        firstRegister.then().statusCode(SC_OK);
-        accessToken = AuthHelper.getAccessToken(firstRegister);
+        AuthHelper.registerUser(user).then().statusCode(SC_OK);
 
         // Вторая регистрация с тем же email
-        Response response = AuthHelper.registerUser(user);
-        response.then()
+        AuthHelper.registerUser(user)
+                .then()
                 .statusCode(SC_FORBIDDEN)
                 .body("success", equalTo(false))
                 .body("message", equalTo("User already exists"));

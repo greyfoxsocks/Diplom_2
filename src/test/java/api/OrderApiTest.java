@@ -1,9 +1,12 @@
 package api;
 
+import api.helpers.AuthHelper;
+import api.helpers.OrderHelper;
 import io.qameta.allure.Description;
 import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import pojo.Order;
 import pojo.User;
@@ -17,11 +20,18 @@ import static org.junit.Assert.assertNotNull;
 @DisplayName("API тесты для создания заказов")
 public class OrderApiTest {
     private String accessToken;
+    private User user;
 
-    private List<String> getValidIngredients() {
-        Response response = OrderHelper.getIngredients();
-        response.then().statusCode(SC_OK);
-        return response.jsonPath().getList("data._id");
+    @Before
+    public void setUp() {
+        // Создание пользователя перед тестами
+        String email = "order_user_" + System.currentTimeMillis() + "@test.ru";
+        user = new User(email, "password", "Username");
+
+        Response registerResponse = AuthHelper.registerUser(user);
+        registerResponse.then().statusCode(SC_OK);
+        accessToken = AuthHelper.getAccessToken(registerResponse);
+        assertNotNull("Access token должен быть получен", accessToken);
     }
 
     @After
@@ -31,18 +41,16 @@ public class OrderApiTest {
         }
     }
 
+    private List<String> getValidIngredients() {
+        Response response = OrderHelper.getIngredients();
+        response.then().statusCode(SC_OK);
+        return response.jsonPath().getList("data._id");
+    }
+
     @Test
     @DisplayName("Создание заказа с авторизацией и ингредиентами")
     @Description("Успешное создание заказа авторизованным пользователем с валидными ингредиентами")
     public void createOrderWithAuthAndIngredientsSuccessTest() {
-        String email = "order_user_" + System.currentTimeMillis() + "@test.ru";
-        User user = new User(email, "password", "Username");
-
-        Response registerResponse = AuthHelper.registerUser(user);
-        registerResponse.then().statusCode(SC_OK);
-        accessToken = AuthHelper.getAccessToken(registerResponse);
-        assertNotNull("Access token должен быть получен", accessToken);
-
         Order order = new Order(getValidIngredients().toArray(new String[0]));
         OrderHelper.createOrder(order, accessToken)
                 .then()
@@ -68,7 +76,7 @@ public class OrderApiTest {
     @Description("Попытка создания заказа без ингредиентов возвращает ошибку")
     public void createOrderWithoutIngredientsFailTest() {
         Order order = new Order(new String[]{});
-        OrderHelper.createOrder(order, null)
+        OrderHelper.createOrder(order, accessToken) // С авторизацией
                 .then()
                 .statusCode(SC_BAD_REQUEST)
                 .body("success", equalTo(false))
@@ -80,7 +88,7 @@ public class OrderApiTest {
     @Description("Попытка создания заказа с невалидным хешем ингредиентов возвращает внутреннюю ошибку сервера")
     public void createOrderWithInvalidIngredientHashFailTest() {
         Order order = new Order(new String[]{"invalid_hash_12345"});
-        OrderHelper.createOrder(order, null)
+        OrderHelper.createOrder(order, accessToken) // С авторизацией
                 .then()
                 .statusCode(SC_INTERNAL_SERVER_ERROR);
     }
